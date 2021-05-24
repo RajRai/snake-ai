@@ -3,11 +3,11 @@ import sys
 import random
 from structures import *
 
-TICK_RATE = 10
+TICK_RATE = 240
 
 BAR_HEIGHT = 40
 SCREEN_HEIGHT = 1000
-BOARD_SIZE = 40
+BOARD_SIZE = 10
 SCREEN_WIDTH = SCREEN_HEIGHT - BAR_HEIGHT
 TILE_SIZE = SCREEN_WIDTH / BOARD_SIZE
 
@@ -39,15 +39,22 @@ class Food:
 
 class Snake:
     def __init__(self):
+        self.create_snake()
+        # Tracking variable for the AI - wanted the game to remain playable for humans (automatic resets)
+        # But the AI also needed to know when it died...
+        self.died = False
+
+    def create_snake(self):
         self.direction = RIGHT
-        middle = Position(BOARD_SIZE / 2, BOARD_SIZE / 2)
+        mid = int(BOARD_SIZE / 2)
+        pos = Position(mid, mid)
         self.positions = Queue()
-        self.positions.push(middle + 2 * LEFT)
-        self.positions.push(middle + LEFT)
-        self.positions.push(middle)
+        self.positions.push(pos + 2 * LEFT)
+        self.positions.push(pos + LEFT)
+        self.positions.push(pos)
 
     def reset(self):
-        self.__init__()
+        self.create_snake()
 
     def get_head_position(self):
         return self.positions.peek(index=self.positions.len() - 1)
@@ -73,6 +80,10 @@ class Snake:
             pygame.draw.rect(surface, BG_COLOR, r, 1)
 
 
+def seed(s):
+    random.seed(s)
+
+
 class Game:
     def __init__(self):
         pygame.init()
@@ -84,12 +95,40 @@ class Game:
         self.food = Food()
         self.score = 0
         self.best = 0
+        self.time = 0
+
+    def reset(self):
+        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        self.clock = pygame.time.Clock()
+        self.snake = Snake()
+        self.food = Food()
+        self.score = 0
+        self.time = 0
+
+    def get_head_distance_from_food(self):
+        head = self.snake.get_head_position()
+        food = self.food.position
+        diffx = head.x - food.x
+        diffy = head.y - food.y
+        return abs(diffx)+abs(diffy)
+
+    def get_board(self):
+        board = [[0 for i in range(BOARD_SIZE)] for j in range(BOARD_SIZE)]
+        for pos in self.snake.positions:
+            if pos.x < BOARD_SIZE > pos.y:
+                board[pos.x][pos.y] = -1
+        head = self.snake.get_head_position()
+        board[head.x][head.y] = 2
+        food = self.food.position
+        board[food.x][food.y] = 1
+        return board
 
     def play(self):
         while True:
             self.tick()
             self.handle_inputs()
             self.render()
+            self.time += 1
 
     def handle_inputs(self):
         for event in pygame.event.get():
@@ -115,10 +154,12 @@ class Game:
                 self.best = self.score
             self.food.randomize_position()
         elif self.snake.get_head_position() in self.snake.positions.queue[:-1]:
+            self.snake.died = True
             self.snake.reset()
             self.score = 0
         elif not ((0 <= self.snake.get_head_position().x < BOARD_SIZE) and (
                 0 <= self.snake.get_head_position().y < BOARD_SIZE)):
+            self.snake.died = True
             self.snake.reset()
             self.score = 0
         pygame.display.update()

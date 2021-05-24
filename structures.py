@@ -35,6 +35,9 @@ class Queue:
     def __init__(self):
         self.queue = []
 
+    def __iter__(self):
+        return self.queue.__iter__()
+
     def is_empty(self):
         return self.queue.len == 0
 
