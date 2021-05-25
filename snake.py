@@ -7,7 +7,7 @@ TICK_RATE = 240
 
 BAR_HEIGHT = 40
 SCREEN_HEIGHT = 1000
-BOARD_SIZE = 10
+BOARD_SIZE = 7
 SCREEN_WIDTH = SCREEN_HEIGHT - BAR_HEIGHT
 TILE_SIZE = SCREEN_WIDTH / BOARD_SIZE
 
@@ -24,11 +24,16 @@ RIGHT = Position(1, 0)
 class Food:
     def __init__(self):
         self.position = None
+        self.rng = random.Random()
+        self.randomize_position()
+
+    def seed(self, s):
+        self.rng.seed(s)
         self.randomize_position()
 
     def randomize_position(self):
-        x = random.randrange(1, BOARD_SIZE - 1)
-        y = random.randrange(1, BOARD_SIZE - 1)
+        x = self.rng.randrange(1, BOARD_SIZE - 1)
+        y = self.rng.randrange(1, BOARD_SIZE - 1)
         self.position = Position(x, y)
 
     def draw(self, surface):
@@ -57,7 +62,7 @@ class Snake:
         self.create_snake()
 
     def get_head_position(self):
-        return self.positions.peek(index=self.positions.len() - 1)
+        return self.positions.peek(-1)
 
     def turn(self, dir):
         if self.direction != (-1 * dir):  # Can't turn backwards
@@ -78,10 +83,6 @@ class Snake:
             r = pygame.Rect((position * TILE_SIZE).as_tuple(), (TILE_SIZE, TILE_SIZE))
             pygame.draw.rect(surface, SNAKE_COLOR, r)
             pygame.draw.rect(surface, BG_COLOR, r, 1)
-
-
-def seed(s):
-    random.seed(s)
 
 
 class Game:
@@ -105,7 +106,7 @@ class Game:
         self.score = 0
         self.time = 0
 
-    def get_head_distance_from_food(self):
+    def get_distance_from_food(self, position):
         head = self.snake.get_head_position()
         food = self.food.position
         diffx = head.x - food.x

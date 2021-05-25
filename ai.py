@@ -26,8 +26,10 @@ class SnakeEnvironment(gym.Env):
         self.game = Game()
         self.action_space = spaces.Discrete(4)  # Up, Down, Left, Right
         self.observation_space = spaces.Box(low=-1, high=3, shape=(snake.BOARD_SIZE ** 2,), dtype=np.float32)
+        self.countedScore = 0
 
     def reset(self):
+        self.countedScore = 0
         self.game.reset()
         return self.next_observation()
 
@@ -43,10 +45,16 @@ class SnakeEnvironment(gym.Env):
     def get_reward(self):
         reward = 0
         if self.game.snake.died:
-            reward -= 1
-        reward += self.game.score * 10
-        reward -= self.game.time / 10*(snake.BOARD_SIZE ** 2)
-        reward -= self.game.get_head_distance_from_food() / 10
+            reward -= 5
+        reward += self.game.score
+        reward -= self.game.time / max(self.game.score, 1)
+
+        # If the snake is moving away from the food...
+        dist = self.game.get_distance_from_food(self.game.snake.get_head_position())
+        dist2 = self.game.get_distance_from_food(self.game.snake.positions.peek(-2))
+        if dist > dist2:
+            reward -= self.game.time * dist
+
         return reward
 
     def step(self, action):
@@ -57,30 +65,29 @@ class SnakeEnvironment(gym.Env):
         return obs, reward, done, {}
 
     def seed(self, s):
-        snake.seed(s)
+        self.game.food.seed(s)
 
 
 def train():
     # Most of the code in this function is from the Keras docs
     # Specifically, https://keras.io/examples/rl/actor_critic_cartpole/
 
-    seed = 42
-    gamma = 0.9  # Discount factor for past rewards
-    max_steps_per_episode = 200
+    seed = 100
+    gamma = 0.8  # Discount factor for past rewards
+    max_steps_per_episode = 1000
     env = SnakeEnvironment()  # Create the environment
     env.seed(seed)
     eps = np.finfo(np.float32).eps.item()  # Smallest number such that 1.0 + eps != 1.0
-    optimizer = keras.optimizers.Adam(learning_rate=0.02)
+    optimizer = keras.optimizers.Adam(learning_rate=0.01)
     huber_loss = keras.losses.Huber()
 
     num_inputs = snake.BOARD_SIZE ** 2
     num_actions = 4
 
     inputs = Input(batch_input_shape=(1, num_inputs), name='input')
-    common = Dense(snake.BOARD_SIZE*2, activation='relu', name='common')(inputs)
-    hidden = Dense(16, activation='relu', name="hidden")(common)
-    action = Dense(4, activation='softmax', name='output')(hidden)
-    critic = Dense(1, name='critic')(hidden)
+    common = Dense(num_inputs, activation='relu', name='common')(inputs)
+    action = Dense(4, activation='softmax', name='output')(common)
+    critic = Dense(1, name='critic')(common)
     # common = Dense(snake.BOARD_SIZE, activation='relu', name='common')(inputs)
     # decision = Dense(16, activation='relu', name='decision')(common)
     # decode = Dense(snake.BOARD_SIZE, activation='relu', name='decode')(decision)
@@ -113,12 +120,12 @@ def train():
                 critic_value_history.append(critic_value[0, 0])
 
                 # Sample action from action probability distribution
-                # action = np.random.choice(num_actions, p=np.squeeze(action_probs))
-                # action_probs_history.append(tf.math.log(action_probs[0, action]))
-
-                # Personally, I prefer to just choose the most likely for this one
-                action = np.argmax(np.squeeze(action_probs))
+                action = np.random.choice(num_actions, p=np.squeeze(action_probs))
                 action_probs_history.append(tf.math.log(action_probs[0, action]))
+
+                # Chooses the most likely, instead of randomizing
+                # action = np.argmax(np.squeeze(action_probs))
+                # action_probs_history.append(tf.math.log(action_probs[0, action]))
 
                 # Apply the sampled action in our environment
                 state, reward, done, _ = env.step(action)
@@ -183,7 +190,7 @@ def train():
             template = "running reward: {:.2f} at episode {}"
             print(template.format(running_reward, episode_count))
 
-        if running_reward > 195:  # Condition to consider the task solved
+        if running_reward > 10000:  # Condition to consider the task solved
             print("Solved at episode {}!".format(episode_count))
             break
 
