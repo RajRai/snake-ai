@@ -47,14 +47,13 @@ class SnakeEnvironment(gym.Env):
         if self.game.snake.died:
             reward -= 5
         reward += self.game.score
-        reward -= self.game.time / max(self.game.score, 1)
+        # reward -= self.game.time / max(self.game.score, 1)
 
         # If the snake is moving away from the food...
         dist = self.game.get_distance_from_food(self.game.snake.get_head_position())
         dist2 = self.game.get_distance_from_food(self.game.snake.positions.peek(-2))
         if dist > dist2:
-            reward -= self.game.time * dist
-
+            reward -= self.game.time * dist / snake.BOARD_SIZE**2
         return reward
 
     def step(self, action):

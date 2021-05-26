@@ -3,7 +3,7 @@ import sys
 import random
 from structures import *
 
-TICK_RATE = 240
+TICK_RATE = 500
 
 BAR_HEIGHT = 40
 SCREEN_HEIGHT = 1000
@@ -61,11 +61,15 @@ class Snake:
     def reset(self):
         self.create_snake()
 
+    # A more precise way of calculating direction
+    def heading(self):
+        return self.get_head_position()-self.positions.peek(-2)
+
     def get_head_position(self):
         return self.positions.peek(-1)
 
     def turn(self, dir):
-        if self.direction != (-1 * dir):  # Can't turn backwards
+        if self.heading() != (-1 * dir):  # Can't turn backwards
             self.direction = dir
 
     def move(self):
@@ -106,11 +110,10 @@ class Game:
         self.score = 0
         self.time = 0
 
-    def get_distance_from_food(self, position):
-        head = self.snake.get_head_position()
+    def get_distance_from_food(self, pos):
         food = self.food.position
-        diffx = head.x - food.x
-        diffy = head.y - food.y
+        diffx = pos.x - food.x
+        diffy = pos.y - food.y
         return abs(diffx)+abs(diffy)
 
     def get_board(self):
@@ -119,17 +122,17 @@ class Game:
             if pos.x < BOARD_SIZE > pos.y:
                 board[pos.x][pos.y] = -1
         head = self.snake.get_head_position()
-        board[head.x][head.y] = 2
+        if head.x < BOARD_SIZE > head.y:
+            board[head.x][head.y] = 2
         food = self.food.position
         board[food.x][food.y] = 1
         return board
 
     def play(self):
         while True:
-            self.tick()
             self.handle_inputs()
+            self.tick()
             self.render()
-            self.time += 1
 
     def handle_inputs(self):
         for event in pygame.event.get():
@@ -163,8 +166,7 @@ class Game:
             self.snake.died = True
             self.snake.reset()
             self.score = 0
-        pygame.display.update()
-        self.clock.tick(TICK_RATE)
+        self.time += 1
 
     def render(self):
         surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT - BAR_HEIGHT))
@@ -179,6 +181,8 @@ class Game:
         scoreArea.blit(text2, (SCREEN_WIDTH - 100, 0))
         self.screen.blit(scoreArea, (0, 0))
         self.screen.blit(surface, (0, BAR_HEIGHT))
+        pygame.display.update()
+        self.clock.tick(TICK_RATE)
 
 
 if __name__ == '__main__':
