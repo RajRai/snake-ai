@@ -3,11 +3,11 @@ import sys
 import random
 from structures import *
 
-TICK_RATE = 500
+TICK_RATE = 5
 
 BAR_HEIGHT = 40
 SCREEN_HEIGHT = 1000
-BOARD_SIZE = 7
+BOARD_SIZE = 8
 SCREEN_WIDTH = SCREEN_HEIGHT - BAR_HEIGHT
 TILE_SIZE = SCREEN_WIDTH / BOARD_SIZE
 
@@ -32,8 +32,8 @@ class Food:
         self.randomize_position()
 
     def randomize_position(self):
-        x = self.rng.randrange(1, BOARD_SIZE - 1)
-        y = self.rng.randrange(1, BOARD_SIZE - 1)
+        x = self.rng.randrange(0, BOARD_SIZE)
+        y = self.rng.randrange(0, BOARD_SIZE)
         self.position = Position(x, y)
 
     def draw(self, surface):
@@ -45,9 +45,10 @@ class Food:
 class Snake:
     def __init__(self):
         self.create_snake()
-        # Tracking variable for the AI - wanted the game to remain playable for humans (automatic resets)
+        # Tracking variables for the AI - wanted the game to remain playable for humans (automatic resets)
         # But the AI also needed to know when it died...
         self.died = False
+        self.found_food = False
 
     def create_snake(self):
         self.direction = RIGHT
@@ -81,6 +82,7 @@ class Snake:
         next = self.positions.peek(1)
         dir = tail - next
         self.positions.insert(0, tail + dir)
+        self.found_food = True
 
     def draw(self, surface):
         for position in self.positions.queue:
@@ -102,11 +104,14 @@ class Game:
         self.best = 0
         self.time = 0
 
-    def reset(self):
+        # Tracking variable for AI
+        self.last_score = 0
+
+    def reset(self, seed=-1):
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         self.clock = pygame.time.Clock()
-        self.snake = Snake()
-        self.food = Food()
+        self.snake.reset()
+        self.last_score = self.score
         self.score = 0
         self.time = 0
 
@@ -135,6 +140,7 @@ class Game:
             self.render()
 
     def handle_inputs(self):
+        global TICK_RATE
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -148,24 +154,35 @@ class Game:
                     self.snake.turn(LEFT)
                 elif event.key == pygame.K_RIGHT:
                     self.snake.turn(RIGHT)
+                elif event.key == pygame.K_f:
+                    TICK_RATE *= 10
+                elif event.key == pygame.K_s:
+                    TICK_RATE /= 10
+
+    def handle_death(self):
+        self.snake.died = True
+        self.reset()
+        self.score = 0
+
+    def increase_score(self):
+        self.snake.increase_length()
+        self.score += 1
+        if self.score > self.best:
+            self.best = self.score
+        self.food.randomize_position()
 
     def tick(self):
         self.snake.move()
         if self.food.position in self.snake.positions.queue:
-            self.snake.increase_length()
-            self.score += 1
-            if self.score > self.best:
-                self.best = self.score
-            self.food.randomize_position()
+            self.increase_score()
+            while self.food.position in self.snake.positions:
+                #self.increase_score()
+                self.food.randomize_position()
         elif self.snake.get_head_position() in self.snake.positions.queue[:-1]:
-            self.snake.died = True
-            self.snake.reset()
-            self.score = 0
+            self.handle_death()
         elif not ((0 <= self.snake.get_head_position().x < BOARD_SIZE) and (
                 0 <= self.snake.get_head_position().y < BOARD_SIZE)):
-            self.snake.died = True
-            self.snake.reset()
-            self.score = 0
+            self.handle_death()  # Only has its own case for readability of the checks
         self.time += 1
 
     def render(self):

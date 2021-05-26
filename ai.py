@@ -7,6 +7,7 @@ from snake import Game
 import gym
 import numpy as np
 from gym import spaces
+import os
 
 
 def map_int_to_direction(i):
@@ -25,41 +26,51 @@ class SnakeEnvironment(gym.Env):
         super(SnakeEnvironment, self)
         self.game = Game()
         self.action_space = spaces.Discrete(4)  # Up, Down, Left, Right
-        self.observation_space = spaces.Box(low=-1, high=3, shape=(snake.BOARD_SIZE ** 2,), dtype=np.float32)
-        self.countedScore = 0
+        self.observation_space = spaces.Box(low=-1, high=3, shape=(snake.BOARD_SIZE ** 2 + 4,), dtype=np.float32)
 
     def reset(self):
-        self.countedScore = 0
         self.game.reset()
         return self.next_observation()
 
     def next_observation(self):
         x = np.array(self.game.get_board()).reshape(snake.BOARD_SIZE ** 2)
+        head = self.game.snake.get_head_position()
+        xdiff = head.x - self.game.food.position.x
+        ydiff = head.y - self.game.food.position.y
+        x = np.append(x, [xdiff, ydiff, head.x, head.y])
         return x
 
     def take_action(self, action):
         self.game.snake.turn(map_int_to_direction(action))
         self.game.tick()
+        self.game.handle_inputs()
         self.game.render()
 
     def get_reward(self):
         reward = 0
-        if self.game.snake.died:
-            reward -= 5
-        reward += self.game.score
-        # reward -= self.game.time / max(self.game.score, 1)
-
+        #reward -= self.game.score / snake.BOARD_SIZE**2
         # If the snake is moving away from the food...
         dist = self.game.get_distance_from_food(self.game.snake.get_head_position())
         dist2 = self.game.get_distance_from_food(self.game.snake.positions.peek(-2))
-        if dist > dist2:
-            reward -= self.game.time * dist / snake.BOARD_SIZE**2
+        if dist > dist2 and not self.game.snake.found_food:
+            reward -= 1 / (snake.BOARD_SIZE*2)
+        else:
+            reward += 1 / (snake.BOARD_SIZE*2)
+        #reward -= dist / snake.BOARD_SIZE**2
+        if self.game.snake.died:
+            reward -= sum(range(1, self.game.last_score))
+            self.game.snake.died = False
+        if self.game.snake.found_food:
+            reward += self.game.score
+            self.game.snake.found_food = False
+        # reward -= self.game.time / max(self.game.score, 1)
+        reward = max(-1, min(1, reward))
         return reward
 
     def step(self, action):
         self.take_action(action)
-        reward = self.get_reward()
         done = self.game.snake.died
+        reward = self.get_reward()
         obs = self.next_observation()
         return obs, reward, done, {}
 
@@ -67,9 +78,13 @@ class SnakeEnvironment(gym.Env):
         self.game.food.seed(s)
 
 
-def train():
+def train(load_model=False):
     # Most of the code in this function is from the Keras docs
     # Specifically, https://keras.io/examples/rl/actor_critic_cartpole/
+
+    # Directory to save and load the model from
+    dir = os.path.dirname(os.path.realpath(__file__))
+    filename = os.path.join(dir, 'data', 'snake-model')
 
     seed = 100
     gamma = 0.8  # Discount factor for past rewards
@@ -80,25 +95,25 @@ def train():
     optimizer = keras.optimizers.Adam(learning_rate=0.01)
     huber_loss = keras.losses.Huber()
 
-    num_inputs = snake.BOARD_SIZE ** 2
+    num_inputs = snake.BOARD_SIZE ** 2 + 4
     num_actions = 4
 
     inputs = Input(batch_input_shape=(1, num_inputs), name='input')
     common = Dense(num_inputs, activation='relu', name='common')(inputs)
     action = Dense(4, activation='softmax', name='output')(common)
     critic = Dense(1, name='critic')(common)
-    # common = Dense(snake.BOARD_SIZE, activation='relu', name='common')(inputs)
-    # decision = Dense(16, activation='relu', name='decision')(common)
-    # decode = Dense(snake.BOARD_SIZE, activation='relu', name='decode')(decision)
-    # action = Dense(4, activation='softmax', name='output')(decode)
-    # critic = Dense(1, name='critic')(decode)
 
     model = Model(inputs=inputs, outputs=[action, critic])
+    if load_model:
+        model = keras.models.load_model(filename)
+
     action_probs_history = []
     critic_value_history = []
     rewards_history = []
     running_reward = 0
     episode_count = 0
+
+    best_reward = -1000
 
     i = 0
     while True:  # Run until solved
@@ -122,9 +137,9 @@ def train():
                 action = np.random.choice(num_actions, p=np.squeeze(action_probs))
                 action_probs_history.append(tf.math.log(action_probs[0, action]))
 
-                # Chooses the most likely, instead of randomizing
-                # action = np.argmax(np.squeeze(action_probs))
-                # action_probs_history.append(tf.math.log(action_probs[0, action]))
+                # Chooses the most likely action, instead of randomizing
+                #action = np.argmax(np.squeeze(action_probs))
+                #action_probs_history.append(tf.math.log(action_probs[0, action]))
 
                 # Apply the sampled action in our environment
                 state, reward, done, _ = env.step(action)
@@ -185,6 +200,10 @@ def train():
 
         # Log details
         episode_count += 1
+        if episode_reward > best_reward:
+            best_reward = episode_reward
+            model.save(filename, overwrite=True)
+
         if episode_count % 10 == 0:
             template = "running reward: {:.2f} at episode {}"
             print(template.format(running_reward, episode_count))
@@ -195,7 +214,7 @@ def train():
 
 
 def main():
-    train()
+    train(load_model=False)
 
 
 if __name__ == "__main__":
