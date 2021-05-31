@@ -54,18 +54,8 @@ class SnakeEnvironment(gym.Env):
 
     def get_reward(self):
         reward = 0
-
-        #reward -= 1 / snake.BOARD_SIZE**2
-        # If the snake is moving away from the food...
-        #dist = self.game.get_distance_from_food(self.game.snake.get_head_position())
-        #dist2 = self.game.get_distance_from_food(self.game.snake.positions.peek(-2))
-        #if dist > dist2 and not self.game.snake.found_food:
-        #    reward -= 1 / (snake.BOARD_SIZE*2)
-        #else:
-        #    reward += 1 / (snake.BOARD_SIZE*2)
-        #reward -= dist / snake.BOARD_SIZE**2
         if self.game.snake.died:
-            reward -= 1
+            reward -= 0.5
             self.game.snake.died = False
         if self.game.snake.found_food:
             self.last_food_found = 0
@@ -73,8 +63,9 @@ class SnakeEnvironment(gym.Env):
             self.game.snake.found_food = False
         if self.last_food_found > (snake.BOARD_SIZE ** 2):
             reward -= 1
+            self.last_food_found = 0
         # reward -= self.game.time / max(self.game.score, 1)
-        reward = max(-1, min(1, reward))
+        #reward = max(-1, min(1, reward))
         return reward
 
     def step(self, action):
@@ -98,8 +89,8 @@ def train(load_model='none'):
     filename = os.path.join(dir, 'data', 'snake-model')
 
     seed = 100
-    gamma = 0.8  # Discount factor for past rewards
-    max_steps_per_episode = 1000
+    gamma = 0.95  # Discount factor for past rewards
+    max_steps_per_episode = 5000
     env = SnakeEnvironment()  # Create the environment
     env.seed(seed)
     eps = np.finfo(np.float32).eps.item()  # Smallest number such that 1.0 + eps != 1.0
@@ -116,9 +107,9 @@ def train(load_model='none'):
 
     model = Model(inputs=inputs, outputs=[action, critic])
     if load_model == 'best':
-        model = keras.models.load_model(filename+'best')
+        model.load_weights(filename+'-best')
     elif load_model == 'last':
-        model = keras.models.load_model(filename+'last')
+        model.load_weights(filename+'-last')
 
     action_probs_history = []
     critic_value_history = []
@@ -138,7 +129,7 @@ def train(load_model='none'):
                 env.render()  # Adding this line would show the attempts
                 # of the agent in a pop up window.
 
-                state = tf.convert_to_tensor(state, dtype=np.float32)
+                state = tf.convert_to_tensor(state)
                 state = tf.expand_dims(state, 0)
 
                 # Predict action probabilities and estimated future rewards
@@ -150,10 +141,6 @@ def train(load_model='none'):
                 action = np.random.choice(num_actions, p=np.squeeze(action_probs))
                 action_probs_history.append(tf.math.log(action_probs[0, action]))
 
-                # Chooses the most likely action, instead of randomizing
-                #action = np.argmax(np.squeeze(action_probs))
-                #action_probs_history.append(tf.math.log(action_probs[0, action]))
-
                 # Apply the sampled action in our environment
                 state, reward, done, _ = env.step(action)
                 rewards_history.append(reward)
@@ -161,8 +148,6 @@ def train(load_model='none'):
 
                 if done:
                     break
-            # print(f"Episode {i} reward: {episode_reward}")
-            # i += 1
 
             # Update running reward to check condition for solving
             running_reward = 0.05 * episode_reward + (1 - 0.05) * running_reward
@@ -215,20 +200,20 @@ def train(load_model='none'):
         episode_count += 1
         if episode_reward > best_reward:
             best_reward = episode_reward
-            model.save(filename+'best', overwrite=True)
-        model.save(filename+'last', overwrite=True)
+            model.save_weights(filename+'-best', overwrite=True)
+        model.save_weights(filename+'-last', overwrite=True)
 
         if episode_count % 10 == 0:
             template = "running reward: {:.2f} at episode {}"
             print(template.format(running_reward, episode_count))
 
-        if running_reward > 10000:  # Condition to consider the task solved
+        if running_reward > 50:  # Condition to consider the task solved
             print("Solved at episode {}!".format(episode_count))
             break
 
 
 def main():
-    train(load_model=True)
+    train(load_model='last')
 
 
 if __name__ == "__main__":
