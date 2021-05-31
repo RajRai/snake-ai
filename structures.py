@@ -38,11 +38,11 @@ class Queue:
     def __iter__(self):
         return self.queue.__iter__()
 
+    def __len__(self):
+        return len(self.queue)
+
     def is_empty(self):
         return self.queue.len == 0
-
-    def len(self):
-        return len(self.queue)
 
     def push(self, obj):
         self.queue.append(obj)

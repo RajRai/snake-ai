@@ -28,8 +28,12 @@ class SnakeEnvironment(gym.Env):
         self.action_space = spaces.Discrete(4)  # Up, Down, Left, Right
         self.observation_space = spaces.Box(low=-1, high=3, shape=(snake.BOARD_SIZE ** 2 + 4,), dtype=np.float32)
 
+        # Number of turns since the last food was found
+        self.last_food_found = 0
+
     def reset(self):
         self.game.reset()
+        self.last_food_found = 0
         return self.next_observation()
 
     def next_observation(self):
@@ -44,30 +48,37 @@ class SnakeEnvironment(gym.Env):
         self.game.snake.turn(map_int_to_direction(action))
         self.game.tick()
         self.game.handle_inputs()
+
+    def render(self):
         self.game.render()
 
     def get_reward(self):
         reward = 0
-        #reward -= self.game.score / snake.BOARD_SIZE**2
+
+        #reward -= 1 / snake.BOARD_SIZE**2
         # If the snake is moving away from the food...
-        dist = self.game.get_distance_from_food(self.game.snake.get_head_position())
-        dist2 = self.game.get_distance_from_food(self.game.snake.positions.peek(-2))
-        if dist > dist2 and not self.game.snake.found_food:
-            reward -= 1 / (snake.BOARD_SIZE*2)
-        else:
-            reward += 1 / (snake.BOARD_SIZE*2)
+        #dist = self.game.get_distance_from_food(self.game.snake.get_head_position())
+        #dist2 = self.game.get_distance_from_food(self.game.snake.positions.peek(-2))
+        #if dist > dist2 and not self.game.snake.found_food:
+        #    reward -= 1 / (snake.BOARD_SIZE*2)
+        #else:
+        #    reward += 1 / (snake.BOARD_SIZE*2)
         #reward -= dist / snake.BOARD_SIZE**2
         if self.game.snake.died:
-            reward -= sum(range(1, self.game.last_score))
+            reward -= 1
             self.game.snake.died = False
         if self.game.snake.found_food:
-            reward += self.game.score
+            self.last_food_found = 0
+            reward += 1
             self.game.snake.found_food = False
+        if self.last_food_found > (snake.BOARD_SIZE ** 2):
+            reward -= 1
         # reward -= self.game.time / max(self.game.score, 1)
         reward = max(-1, min(1, reward))
         return reward
 
     def step(self, action):
+        self.last_food_found += 1
         self.take_action(action)
         done = self.game.snake.died
         reward = self.get_reward()
@@ -78,7 +89,7 @@ class SnakeEnvironment(gym.Env):
         self.game.food.seed(s)
 
 
-def train(load_model=False):
+def train(load_model='none'):
     # Most of the code in this function is from the Keras docs
     # Specifically, https://keras.io/examples/rl/actor_critic_cartpole/
 
@@ -104,8 +115,10 @@ def train(load_model=False):
     critic = Dense(1, name='critic')(common)
 
     model = Model(inputs=inputs, outputs=[action, critic])
-    if load_model:
-        model = keras.models.load_model(filename)
+    if load_model == 'best':
+        model = keras.models.load_model(filename+'best')
+    elif load_model == 'last':
+        model = keras.models.load_model(filename+'last')
 
     action_probs_history = []
     critic_value_history = []
@@ -122,7 +135,7 @@ def train(load_model=False):
         episode_reward = 0
         with tf.GradientTape() as tape:
             for timestep in range(1, max_steps_per_episode):
-                # env.render(); Adding this line would show the attempts
+                env.render()  # Adding this line would show the attempts
                 # of the agent in a pop up window.
 
                 state = tf.convert_to_tensor(state, dtype=np.float32)
@@ -202,7 +215,8 @@ def train(load_model=False):
         episode_count += 1
         if episode_reward > best_reward:
             best_reward = episode_reward
-            model.save(filename, overwrite=True)
+            model.save(filename+'best', overwrite=True)
+        model.save(filename+'last', overwrite=True)
 
         if episode_count % 10 == 0:
             template = "running reward: {:.2f} at episode {}"
@@ -214,7 +228,7 @@ def train(load_model=False):
 
 
 def main():
-    train(load_model=False)
+    train(load_model=True)
 
 
 if __name__ == "__main__":

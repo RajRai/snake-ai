@@ -59,6 +59,9 @@ class Snake:
         self.positions.push(pos + LEFT)
         self.positions.push(pos)
 
+    def __len__(self):
+        return len(self.positions)
+
     def reset(self):
         self.create_snake()
 
