@@ -64,8 +64,7 @@ class SnakeEnvironment(gym.Env):
         if self.last_food_found > (snake.BOARD_SIZE ** 2):
             reward -= 1
             self.last_food_found = 0
-        # reward -= self.game.time / max(self.game.score, 1)
-        #reward = max(-1, min(1, reward))
+        # reward = max(-1, min(1, reward))  # Clamp to [-1, 1]
         return reward
 
     def step(self, action):
@@ -83,14 +82,16 @@ class SnakeEnvironment(gym.Env):
 def train(load_model='none'):
     # Most of the code in this function is from the Keras docs
     # Specifically, https://keras.io/examples/rl/actor_critic_cartpole/
+    # The CartPole environment has been replaced with an extension of an OpenAI Gym Environment class for use with
+    # the actor critic method
 
     # Directory to save and load the model from
     dir = os.path.dirname(os.path.realpath(__file__))
     filename = os.path.join(dir, 'data', 'snake-model')
 
     seed = 100
-    gamma = 0.95  # Discount factor for past rewards
-    max_steps_per_episode = 5000
+    gamma = 0.99  # Discount factor for past rewards
+    max_steps_per_episode = 1000
     env = SnakeEnvironment()  # Create the environment
     env.seed(seed)
     eps = np.finfo(np.float32).eps.item()  # Smallest number such that 1.0 + eps != 1.0
@@ -119,15 +120,13 @@ def train(load_model='none'):
 
     best_reward = -1000
 
-    i = 0
     while True:  # Run until solved
         state = env.reset()
         env.seed(seed)
         episode_reward = 0
         with tf.GradientTape() as tape:
             for timestep in range(1, max_steps_per_episode):
-                env.render()  # Adding this line would show the attempts
-                # of the agent in a pop up window.
+                env.render()  # Adding this line would show the attempts of the agent in a pop up window.
 
                 state = tf.convert_to_tensor(state)
                 state = tf.expand_dims(state, 0)
@@ -213,10 +212,9 @@ def train(load_model='none'):
 
 
 def main():
+    print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
     train(load_model='last')
 
 
 if __name__ == "__main__":
-    print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
-
     main()

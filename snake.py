@@ -45,8 +45,8 @@ class Food:
 class Snake:
     def __init__(self):
         self.create_snake()
-        # Tracking variables for the AI - wanted the game to remain playable for humans (automatic resets)
-        # But the AI also needed to know when it died...
+        # Tracking variables for the AI - wanted the game to reset automatically on death
+        # But the AI also needed to know when it accomplished things without saving the prior states and comparing
         self.died = False
         self.found_food = False
 
@@ -111,8 +111,6 @@ class Game:
         self.last_score = 0
 
     def reset(self, seed=-1):
-        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-        self.clock = pygame.time.Clock()
         self.snake.reset()
         self.last_score = self.score
         self.score = 0
@@ -179,12 +177,11 @@ class Game:
         if self.food.position in self.snake.positions.queue:
             self.increase_score()
             while self.food.position in self.snake.positions:
-                #self.increase_score()
                 self.food.randomize_position()
-        elif self.snake.get_head_position() in self.snake.positions.queue[:-1]:
+        elif self.snake.get_head_position() in self.snake.positions.queue[:-1]:  # If the head is inside its body
             self.handle_death()
         elif not ((0 <= self.snake.get_head_position().x < BOARD_SIZE) and (
-                0 <= self.snake.get_head_position().y < BOARD_SIZE)):
+                0 <= self.snake.get_head_position().y < BOARD_SIZE)):  # If the snake is out of bounds
             self.handle_death()  # Only has its own case for readability of the checks
         self.time += 1
 
