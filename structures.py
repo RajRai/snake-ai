@@ -31,6 +31,7 @@ class Position:
     def __str__(self):
         return f"({self.x}, {self.y})"
 
+
 class Queue:
     def __init__(self):
         self.queue = []
